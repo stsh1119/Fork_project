@@ -5,7 +5,7 @@ class User(db.Model):
     __tablename__ = 'users'
     email = db.Column(db.String(50), nullable=False, primary_key=True)
     login = db.Column(db.String(50), nullable=False, unique=True)
-    password = db.Column(db.String(50), nullable=False)
+    password = db.Column(db.String(60), nullable=False)
     refresh_token = db.Column(db.String(257), default=None)
     forks = db.relationship('Fork', backref='users', lazy=True)
 
