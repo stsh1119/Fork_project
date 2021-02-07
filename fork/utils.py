@@ -12,7 +12,7 @@ def validate_user_email(email):
         return email
 
 
-def prettify_fork(forks: list):
+def prettify_forks(forks: list) -> list:
     forks_list = []
     for fork in forks:
         fork = {
