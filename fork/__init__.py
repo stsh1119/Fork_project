@@ -23,7 +23,9 @@ def create_app():
 
     from fork.main.routes import main
     from fork.auth.routes import auth
+    from fork.errors.handlers import errors
     app.register_blueprint(auth)
     app.register_blueprint(main)
+    app.register_blueprint(errors)
 
     return app

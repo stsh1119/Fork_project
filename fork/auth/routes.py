@@ -79,10 +79,3 @@ def logout():
     jti = get_raw_jwt()['jti']
     blacklist.add(jti)
     return jsonify({"msg": "Successfully logged out"}), 200
-
-
-@auth.route('/protected', methods=['GET'])
-@jwt_required
-def protected():
-    login = get_jwt_identity()
-    return jsonify(logged_in_as=login), 200

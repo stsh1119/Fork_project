@@ -25,3 +25,14 @@ def prettify_forks(forks: list) -> list:
         }
         forks_list.append(fork)
     return forks_list
+
+
+def prettify_categories(categories: list) -> list:
+    categories_list = []
+    for category in categories:
+        category = {
+            'name': category.category,
+            'description': category.description,
+        }
+        categories_list.append(category)
+    return categories_list
