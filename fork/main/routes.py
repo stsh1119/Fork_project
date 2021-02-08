@@ -3,6 +3,8 @@ from flask_jwt_extended import jwt_required
 from fork.models import Fork, ForkCategory
 from fork.utils import prettify_forks, prettify_categories
 
+ITEMS_PER_PAGE = 10
+
 main = Blueprint('main', __name__)
 
 
@@ -10,7 +12,7 @@ main = Blueprint('main', __name__)
 @jwt_required
 def get_all_forks():
     page = request.args.get('page', default=1, type=int)
-    forks = Fork.query.order_by(Fork.creation_date.desc()).paginate(page=page, per_page=10).items
+    forks = Fork.query.order_by(Fork.creation_date.desc()).paginate(page=page, per_page=ITEMS_PER_PAGE).items
     forks = prettify_forks(forks)
     return jsonify(forks)
 
@@ -30,6 +32,16 @@ def get_fork_by_id(fork_id):
 @jwt_required
 def get_fork_catagories():
     page = request.args.get('page', default=1, type=int)
-    categories = ForkCategory.query.paginate(page=page, per_page=1).items
+    categories = ForkCategory.query.paginate(page=page, per_page=ITEMS_PER_PAGE).items
     categories = prettify_categories(categories)
     return jsonify(categories)
+
+
+@main.route('/forks/category/<string:category_name>')
+@main.route('/forks/category/', defaults={'category_name': 'Uncategorized'})
+@jwt_required
+def get_fork_from_category(category_name):
+    page = request.args.get('page', default=1, type=int)
+    forks = Fork.query.filter_by(fork_category=category_name).paginate(page=page, per_page=ITEMS_PER_PAGE).items
+    forks = prettify_forks(forks)
+    return jsonify(forks)
