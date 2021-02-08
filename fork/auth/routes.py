@@ -1,4 +1,4 @@
-from flask import jsonify, request
+from flask import Blueprint, request, jsonify
 from sqlalchemy.exc import IntegrityError
 from flask_jwt_extended import (
     jwt_required, create_access_token,
@@ -6,10 +6,11 @@ from flask_jwt_extended import (
     get_jwt_identity, get_raw_jwt
 )
 import datetime
-from fork import app, bcrypt, db, jwt
-from fork.models import User, Fork
+from fork import bcrypt, db, jwt
+from fork.models import User
 from fork.utils import validate_user_email
 
+auth = Blueprint('auth', __name__)
 blacklist = set()
 
 
@@ -19,7 +20,7 @@ def check_if_token_in_blacklist(decrypted_token):
     return jti in blacklist
 
 
-@app.route('/register', methods=['POST'])
+@auth.route('/register', methods=['POST'])
 def register():
     login = request.json.get('login', None)
     email = request.json.get('email', None)
@@ -42,7 +43,7 @@ def register():
         return jsonify({'error': 'Missing data'})
 
 
-@app.route('/login', methods=['POST'])
+@auth.route('/login', methods=['POST'])
 def login():
     login = request.json.get('login', None)
     password = request.json.get('password', None)
@@ -61,7 +62,7 @@ def login():
     return jsonify({"msg": "Bad login or password"}), 401
 
 
-@app.route('/refresh', methods=['POST'])
+@auth.route('/refresh', methods=['POST'])
 @jwt_refresh_token_required
 def refresh():
     current_user = get_jwt_identity()
@@ -72,24 +73,9 @@ def refresh():
     return jsonify(response), 200
 
 
-@app.route('/logout', methods=['DELETE'])
+@auth.route('/logout', methods=['DELETE'])
 @jwt_required
 def logout():
     jti = get_raw_jwt()['jti']
     blacklist.add(jti)
     return jsonify({"msg": "Successfully logged out"}), 200
-
-
-@app.route('/protected', methods=['GET'])
-@jwt_required
-def protected():
-    login = get_jwt_identity()
-    return jsonify(logged_in_as=login), 200
-
-
-@app.route('/forks/all')
-@jwt_required
-def get_all_forks():
-    page = request.args.get('page', default=1, type=int)  # 1 will be default
-    forks = Fork.query.order_by(Fork.creation_date.desc()).paginate(page=page, per_page=10)
-    return jsonify(fork.items for fork in forks)

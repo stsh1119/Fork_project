@@ -10,3 +10,29 @@ def validate_user_email(email):
     except EmailNotValidError:
         email = ''
         return email
+
+
+def prettify_forks(forks: list) -> list:
+    forks_list = []
+    for fork in forks:
+        fork = {
+            'id': fork.fork_id,
+            'name': fork.name,
+            'description': fork.description,
+            'creation_date': fork.creation_date,
+            'category': fork.fork_category,
+            'owner': fork.user,
+        }
+        forks_list.append(fork)
+    return forks_list
+
+
+def prettify_categories(categories: list) -> list:
+    categories_list = []
+    for category in categories:
+        category = {
+            'name': category.category,
+            'description': category.description,
+        }
+        categories_list.append(category)
+    return categories_list
