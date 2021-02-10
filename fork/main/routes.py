@@ -62,3 +62,21 @@ def create_new_fork():
         db.session.commit()
         return jsonify(result='Fork successfully created'), 201
     return jsonify(error='One or several parameters are invalid'), 400
+
+
+@main.route('/forks/my_forks')
+@jwt_required
+def show_your_forks():
+    user = User.query.filter_by(login=get_jwt_identity()).first()
+    my_forks = prettify_forks(Fork.query.filter_by(user=user.email).all())
+    return jsonify(my_forks), 200
+
+
+@main.route('/forks/<string:email>')
+@jwt_required
+def show_forks_owned_by_user(email):
+    user = User.query.filter_by(email=email).first()
+    if user:
+        user_forks = prettify_forks(Fork.query.filter_by(user=user.email).all())
+        return jsonify(user_forks), 200
+    return jsonify(error='Couldn\'t find that user'), 400
