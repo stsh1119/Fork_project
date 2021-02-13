@@ -64,6 +64,19 @@ def create_new_fork():
     return jsonify(error='One or several parameters are invalid'), 400
 
 
+@main.route('/forks/delete', methods=['DELETE'])
+@jwt_required
+def delete_fork():
+    user = User.query.filter_by(login=get_jwt_identity()).first()
+    fork_name = request.args.get('name')
+    fork = Fork.query.filter_by(name=fork_name).first_or_404()
+    if fork.user == user.email:
+        db.session.delete(fork)
+        db.session.commit()
+        return jsonify(result='Fork successfully deleted'), 201
+    return jsonify(error='You cannot delete this fork'), 400
+
+
 @main.route('/forks/my_forks')
 @jwt_required
 def show_your_forks():
