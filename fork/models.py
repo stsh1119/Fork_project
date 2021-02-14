@@ -36,3 +36,14 @@ class ForkCategory(db.Model):
 
     def __repr__(self):
         return f"Fork_category('{self.category}', '{self.description}')"
+
+
+class Subscription(db.Model):
+    __tablename__ = 'subscriptions'
+    id = db.Column(db.Integer, primary_key=True)
+    user_email = db.Column(db.String(50), db.ForeignKey('users.email'), nullable=False)
+    subscription_category = db.Column(db.String(50), db.ForeignKey('fork_categories.category'), nullable=False)
+    __table_args__ = (db.UniqueConstraint('user_email', 'subscription_category'), )
+
+    def __repr__(self):
+        return f"Subscription('{self.user_email}', '{self.subscription_category}')"
