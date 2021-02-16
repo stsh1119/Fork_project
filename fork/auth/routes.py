@@ -13,6 +13,8 @@ from fork.utils import validate_user_email
 auth = Blueprint('auth', __name__)
 blacklist = set()
 
+ACCESS_TOKEN_EXPIRY = datetime.timedelta(minutes=15)
+
 
 @jwt.token_in_blacklist_loader
 def check_if_token_in_blacklist(decrypted_token):
@@ -49,11 +51,10 @@ def login():
     password = request.json.get('password', None)
     user = User.query.filter_by(login=login).first()
     if user and bcrypt.check_password_hash(user.password, password):
-        access_expiry = datetime.timedelta(minutes=15)
         reftesh_expiry = datetime.timedelta(days=1)
         refresh_token = create_refresh_token(identity=login, expires_delta=reftesh_expiry)
         response = {
-            'access_token': create_access_token(identity=login, expires_delta=access_expiry),
+            'access_token': create_access_token(identity=login, expires_delta=ACCESS_TOKEN_EXPIRY),
             'refresh_token': refresh_token,
         }
         user.refresh_token = refresh_token
@@ -66,9 +67,8 @@ def login():
 @jwt_refresh_token_required
 def refresh():
     current_user = get_jwt_identity()
-    access_expiry = datetime.timedelta(minutes=15)
     response = {
-        'access_token': create_access_token(identity=current_user, expires_delta=access_expiry),
+        'access_token': create_access_token(identity=current_user, expires_delta=ACCESS_TOKEN_EXPIRY),
     }
     return jsonify(response), 200
 
