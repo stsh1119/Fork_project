@@ -1,7 +1,8 @@
 from flask import jsonify, request, Blueprint
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from fork.models import Fork, User, ForkCategory, db
+from fork.models import Fork, User, ForkCategory, Subscription, db
 from fork.utils import prettify_forks, prettify_categories, prepare_creation_data
+from sqlalchemy import exc
 
 ITEMS_PER_PAGE = 10
 
@@ -93,3 +94,44 @@ def show_forks_owned_by_user(email):
         user_forks = prettify_forks(Fork.query.filter_by(user=user.email).all())
         return jsonify(user_forks), 200
     return jsonify(error='Couldn\'t find that user'), 400
+
+
+@main.route('/forks/sign_up', methods=['POST'])
+@jwt_required
+def sign_up_for_notifications():
+    request_category = request.args.get('category')
+    existing_categories = [category.category for category in ForkCategory.query.all()]
+    if request_category not in existing_categories:
+        return jsonify(error='This category doesn\'t exist.'), 404
+    user_email = User.query.filter_by(login=get_jwt_identity()).first().email
+    subscription = Subscription(user_email=user_email, subscription_category=request_category)
+    try:
+        db.session.add(subscription)
+        db.session.commit()
+        return jsonify(status=f'{user_email} has signed up for {request_category}'), 200
+    except exc.IntegrityError:
+        return jsonify(status=f'{user_email} is already signed up for {request_category}'), 409
+
+
+@main.route('/forks/remove_subscription', methods=['DELETE'])
+@jwt_required
+def remove_email_notifications():
+    request_category = request.args.get('category')
+    user_email = User.query.filter_by(login=get_jwt_identity()).first().email
+    subscription = Subscription.query.filter_by(user_email=user_email, subscription_category=request_category).first()
+    if subscription:
+        db.session.delete(subscription)
+        db.session.commit()
+        return jsonify(f'Subscription for {request_category} was cancelled'), 200
+    return jsonify(f'{user_email} is not signed up for {request_category}')
+
+
+@main.route('/forks/view_subscriptions')
+@jwt_required
+def view_subscriptions():
+    user_email = User.query.filter_by(login=get_jwt_identity()).first().email
+    subscriptions = Subscription.query.filter_by(user_email=user_email).all()
+    if subscriptions:
+        result = [subscriptions.subscription_category for subscriptions in subscriptions]
+        return jsonify(result)
+    return jsonify(f'{user_email} does not have any subscriptions')
