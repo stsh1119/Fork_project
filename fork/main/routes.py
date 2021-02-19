@@ -1,7 +1,7 @@
 from flask import jsonify, request, Blueprint
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from fork.models import Fork, User, ForkCategory, Subscription, db
-from fork.utils import prettify_forks, prettify_categories, prepare_creation_data
+from fork.utils import prettify_forks, prettify_categories, prepare_creation_data, send_notification_email
 from sqlalchemy import exc
 
 ITEMS_PER_PAGE = 10
@@ -13,7 +13,7 @@ main = Blueprint('main', __name__)
 @jwt_required
 def get_all_forks():
     page = request.args.get('page', default=1, type=int)
-    forks = Fork.query.order_by(Fork.creation_date.desc()).paginate(page=page, per_page=ITEMS_PER_PAGE).items
+    forks = Fork.query.order_by(Fork.fork_id.desc()).paginate(page=page, per_page=ITEMS_PER_PAGE).items
     forks = prettify_forks(forks)
     return jsonify(forks)
 
@@ -26,7 +26,7 @@ def get_fork_by_id(fork_id):
     try:
         return jsonify(forks[0])  # If no item is found, IndexError will be raised
     except IndexError:
-        return jsonify(error='There is no fork with such id')
+        return jsonify(error='There is no fork with such id'), 404
 
 
 @main.route('/forks/categories')
@@ -61,6 +61,9 @@ def create_new_fork():
                     user=user.email)
         db.session.add(fork)
         db.session.commit()
+        users_to_notify = Subscription.query.filter_by(subscription_category=results.get('category')).all()
+        if users_to_notify:
+            send_notification_email(users_list=users_to_notify, fork_category=results.get('category'))
         return jsonify(result='Fork successfully created'), 201
     return jsonify(error='One or several parameters are invalid'), 400
 
