@@ -1,5 +1,8 @@
 from email_validator import validate_email, EmailNotValidError
 from fork.models import ForkCategory
+from flask_mail import Mail, Message
+
+mail = Mail()
 
 
 def validate_user_email(email):
@@ -43,7 +46,7 @@ def prepare_creation_data(raw_data):
         this will be marked as 'Uncategorized' otherwise.
 
         If all([name, description, creation_date, category in [category.category for category in ForkCategory.query.all()]]):
-        checks whether all needed parameters are prevent in json body AND that provided category is within already existing ones
+        checks whether all needed parameters are present in json body AND that provided category is within already existing ones
     """
     name = raw_data.get('name', None)
     description = raw_data.get('description', None)
@@ -57,3 +60,14 @@ def prepare_creation_data(raw_data):
                   }
         return result
     return False  # False means that given data is invalid in some way
+
+
+def send_notification_email(users_list, fork_category):
+    for user in users_list:
+        msg = Message('New fork added!',
+                      sender='fork_project@gmail.com',
+                      recipients=[user.user_email])
+        msg.body = f"""Hello, {user.user_email},
+New fork was added to {fork_category}
+"""
+    mail.send(msg)
