@@ -6,6 +6,7 @@ mail = Mail()
 
 
 def validate_user_email(email):
+    """"Using third party library validates user's email and in case email is invalid - returns falsey value"""
     try:
         valid = validate_email(email)
         email = valid.email
@@ -16,6 +17,7 @@ def validate_user_email(email):
 
 
 def prettify_forks(forks: list) -> list:
+    """Takes db output(queries related to forks) and serializes it, so that it can be returned"""
     forks_list = []
     for fork in forks:
         fork = {
@@ -31,6 +33,7 @@ def prettify_forks(forks: list) -> list:
 
 
 def prettify_categories(categories: list) -> list:
+    """Takes db output(queries related to fork categories) and serializes it, so that it can be returned"""
     categories_list = []
     for category in categories:
         category = {
@@ -63,6 +66,7 @@ def prepare_creation_data(raw_data):
 
 
 def send_notification_email(users_list, fork_category):
+    """Sends an email to a list of users, subscribed to some fork category"""
     for user in users_list:
         msg = Message('New fork added!',
                       sender='fork_project@gmail.com',
