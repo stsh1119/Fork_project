@@ -1,7 +1,7 @@
 from flask import Flask
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager
-from fork.models import db
+from fork.models import db, ma
 from fork.utils import mail
 from fork.config import Config
 
@@ -17,6 +17,7 @@ def create_app(config_class=Config):
     bcrypt.init_app(app)
     jwt.init_app(app)
     mail.init_app(app)
+    ma.init_app(app)
 
     from fork.main.routes import main
     from fork.auth.routes import auth

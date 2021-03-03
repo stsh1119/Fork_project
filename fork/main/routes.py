@@ -1,7 +1,7 @@
 from flask import jsonify, request, Blueprint
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from fork.models import Fork, User, ForkCategory, Subscription, db
-from fork.utils import prettify_forks, prettify_categories, prepare_creation_data, send_notification_email
+from fork.models import Fork, User, ForkCategory, Subscription, db, fork_category_schema, forks_schema, subscription_schema
+from fork.utils import prepare_creation_data, send_notification_email
 from sqlalchemy import exc
 
 ITEMS_PER_PAGE = 10
@@ -14,7 +14,7 @@ main = Blueprint('main', __name__)
 def get_all_forks():
     page = request.args.get('page', default=1, type=int)
     forks = Fork.query.order_by(Fork.fork_id.desc()).paginate(page=page, per_page=ITEMS_PER_PAGE).items
-    forks = prettify_forks(forks)
+    forks = forks_schema.dump(forks)
     return jsonify(forks)
 
 
@@ -22,11 +22,8 @@ def get_all_forks():
 @jwt_required
 def get_fork_by_id(fork_id):
     forks = Fork.query.filter_by(fork_id=fork_id).all()
-    forks = prettify_forks(forks)
-    try:
-        return jsonify(forks[0])  # If no item is found, IndexError will be raised
-    except IndexError:
-        return jsonify(error='There is no fork with such id'), 404
+    forks = forks_schema.dump(forks)
+    return jsonify(forks)
 
 
 @main.route('/forks/categories')
@@ -34,7 +31,7 @@ def get_fork_by_id(fork_id):
 def get_fork_catagories():
     page = request.args.get('page', default=1, type=int)
     categories = ForkCategory.query.paginate(page=page, per_page=ITEMS_PER_PAGE).items
-    categories = prettify_categories(categories)
+    categories = fork_category_schema.dump(categories)
     return jsonify(categories)
 
 
@@ -44,7 +41,7 @@ def get_fork_catagories():
 def get_fork_from_category(category_name):
     page = request.args.get('page', default=1, type=int)
     forks = Fork.query.filter_by(fork_category=category_name).paginate(page=page, per_page=ITEMS_PER_PAGE).items
-    forks = prettify_forks(forks)
+    forks = forks_schema.dump(forks)
     return jsonify(forks)
 
 
@@ -63,6 +60,7 @@ def create_new_fork():
         db.session.commit()
         users_to_notify = Subscription.query.filter_by(subscription_category=results.get('category')).all()
         if users_to_notify:
+            # users = subscription_schema.dump(users_to_notify)
             send_notification_email(users_list=users_to_notify, fork_category=results.get('category'))
         return jsonify(result='Fork successfully created'), 201
     return jsonify(error='One or several parameters are invalid'), 400
@@ -85,7 +83,7 @@ def delete_fork():
 @jwt_required
 def show_your_forks():
     user = User.query.filter_by(login=get_jwt_identity()).first()
-    my_forks = prettify_forks(Fork.query.filter_by(user=user.email).all())
+    my_forks = forks_schema.dump(Fork.query.filter_by(user=user.email).all())
     return jsonify(my_forks), 200
 
 
@@ -94,7 +92,7 @@ def show_your_forks():
 def show_forks_owned_by_user(email):
     user = User.query.filter_by(email=email).first()
     if user:
-        user_forks = prettify_forks(Fork.query.filter_by(user=user.email).all())
+        user_forks = forks_schema.dump(Fork.query.filter_by(user=user.email).all())
         return jsonify(user_forks), 200
     return jsonify(error='Couldn\'t find that user'), 400
 

@@ -1,5 +1,8 @@
 from flask_sqlalchemy import SQLAlchemy
+from flask_marshmallow import Marshmallow
+
 db = SQLAlchemy()
+ma = Marshmallow()
 
 
 class User(db.Model):
@@ -47,3 +50,41 @@ class Subscription(db.Model):
 
     def __repr__(self):
         return f"Subscription('{self.user_email}', '{self.subscription_category}')"
+
+
+class UserSchema(ma.SQLAlchemySchema):
+    class Meta:
+        model = User
+    email = ma.auto_field()
+    login = ma.auto_field()
+
+
+class ForkSchema(ma.SQLAlchemySchema):
+    class Meta:
+        model = Fork
+    fork_id = ma.auto_field()
+    name = ma.auto_field()
+    description = ma.auto_field()
+    creation_date = ma.auto_field()
+    fork_category = ma.auto_field()
+    user = ma.auto_field()
+
+
+class ForkCategorySchema(ma.SQLAlchemySchema):
+    class Meta:
+        model = ForkCategory
+    category = ma.auto_field()
+    description = ma.auto_field()
+
+
+class SubscriptionSchema(ma.SQLAlchemySchema):
+    class Meta:
+        model = Subscription
+    user_email = ma.auto_field()
+    subscription_category = ma.auto_field()
+
+
+user_schema = UserSchema()
+forks_schema = ForkSchema(many=True)
+fork_category_schema = ForkCategorySchema(many=True)
+subscription_schema = SubscriptionSchema(many=True)
