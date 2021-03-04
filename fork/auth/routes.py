@@ -14,6 +14,7 @@ auth = Blueprint('auth', __name__)
 blacklist = set()
 
 ACCESS_TOKEN_EXPIRY = datetime.timedelta(minutes=15)
+REFRESH_TOKEN_EXPIRY = datetime.timedelta(days=1)
 
 
 @jwt.token_in_blacklist_loader
@@ -55,8 +56,7 @@ def login():
     password = request.json.get('password', None)
     user = User.query.filter_by(login=login).first()
     if user and bcrypt.check_password_hash(user.password, password):
-        reftesh_expiry = datetime.timedelta(days=1)
-        refresh_token = create_refresh_token(identity=login, expires_delta=reftesh_expiry)
+        refresh_token = create_refresh_token(identity=login, expires_delta=REFRESH_TOKEN_EXPIRY)
         response = {
             'access_token': create_access_token(identity=login, expires_delta=ACCESS_TOKEN_EXPIRY),
             'refresh_token': refresh_token,
@@ -71,9 +71,14 @@ def login():
 @jwt_refresh_token_required
 def refresh():
     current_user = get_jwt_identity()
+    new_refresh_token = create_refresh_token(identity=current_user, expires_delta=REFRESH_TOKEN_EXPIRY)
     response = {
         'access_token': create_access_token(identity=current_user, expires_delta=ACCESS_TOKEN_EXPIRY),
+        'refresh_token': new_refresh_token,
     }
+    user = User.query.filter_by(login=current_user).first()
+    user.refresh_token = new_refresh_token
+    db.session.commit()
     return jsonify(response), 200
 
 
@@ -104,4 +109,4 @@ def change_password():
         user.password = bcrypt.generate_password_hash(new_password)
         db.session.commit()
         return jsonify(msg="Password was changed."), 201
-    return jsonify(msg="Bad request, following parameters are required: old_password, new_password, confirm_new_password "), 400
+    return jsonify(msg="Bad request, following parameters are required: old_password, new_password, confirm_new_password"), 400
