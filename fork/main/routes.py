@@ -1,51 +1,53 @@
 from flask import jsonify, request, Blueprint
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from fork.models import Fork, User, ForkCategory, Subscription, db, fork_category_schema, forks_schema, subscription_schema
-from fork.utils import prepare_creation_data, send_notification_email
+from fork.models import (Fork, User, ForkCategory, Subscription, db,
+                         fork_category_schema, forks_schema, subscription_schema, fork_schema)
+from fork.utils import prepare_creation_data
 from sqlalchemy import exc
+from fork.tasks import send_notification_email
 
 ITEMS_PER_PAGE = 10
 
-main = Blueprint('main', __name__)
+main = Blueprint('main', __name__, url_prefix='/forks')
 
 
-@main.route('/forks/all')
+@main.route('/all')
 @jwt_required
 def get_all_forks():
     page = request.args.get('page', default=1, type=int)
     forks = Fork.query.order_by(Fork.fork_id.desc()).paginate(page=page, per_page=ITEMS_PER_PAGE).items
-    forks = forks_schema.dump(forks)
-    return jsonify(forks)
+    serialized_forks = forks_schema.dump(forks)
+    return jsonify(serialized_forks)
 
 
-@main.route('/forks/<int:fork_id>')
+@main.route('/<int:fork_id>')
 @jwt_required
 def get_fork_by_id(fork_id):
-    forks = Fork.query.filter_by(fork_id=fork_id).all()
-    forks = forks_schema.dump(forks)
-    return jsonify(forks)
+    fork = Fork.query.filter_by(fork_id=fork_id).first()
+    serialized_fork = fork_schema.dump(fork)
+    return jsonify(serialized_fork)
 
 
-@main.route('/forks/categories')
+@main.route('/categories')
 @jwt_required
 def get_fork_catagories():
     page = request.args.get('page', default=1, type=int)
     categories = ForkCategory.query.paginate(page=page, per_page=ITEMS_PER_PAGE).items
-    categories = fork_category_schema.dump(categories)
-    return jsonify(categories)
+    serialized_categories = fork_category_schema.dump(categories)
+    return jsonify(serialized_categories)
 
 
-@main.route('/forks/category/<string:category_name>')
-@main.route('/forks/category/', defaults={'category_name': 'Uncategorized'})
+@main.route('/category/<string:category_name>')
+@main.route('/category/', defaults={'category_name': 'Uncategorized'})
 @jwt_required
-def get_fork_from_category(category_name):
+def get_forks_from_category(category_name):
     page = request.args.get('page', default=1, type=int)
     forks = Fork.query.filter_by(fork_category=category_name).paginate(page=page, per_page=ITEMS_PER_PAGE).items
-    forks = forks_schema.dump(forks)
-    return jsonify(forks)
+    serialized_forks = forks_schema.dump(forks)
+    return jsonify(serialized_forks)
 
 
-@main.route('/forks/create', methods=['POST'])
+@main.route('/create', methods=['POST'])
 @jwt_required
 def create_new_fork():
     user = User.query.filter_by(login=get_jwt_identity()).first()
@@ -59,18 +61,19 @@ def create_new_fork():
         db.session.add(fork)
         db.session.commit()
         users_to_notify = Subscription.query.filter_by(subscription_category=results.get('category')).all()
-        if users_to_notify:
-            # users = subscription_schema.dump(users_to_notify)
-            send_notification_email(users_list=users_to_notify, fork_category=results.get('category'))
+        serialized_users_to_notify = subscription_schema.dump(users_to_notify)
+        if serialized_users_to_notify:
+            send_notification_email.delay(users_list=serialized_users_to_notify, fork_category=results.get('category'))
+            return jsonify(result='Fork successfully created'), 201
         return jsonify(result='Fork successfully created'), 201
     return jsonify(error='One or several parameters are invalid'), 400
 
 
-@main.route('/forks/delete', methods=['DELETE'])
+@main.route('/delete', methods=['DELETE'])
 @jwt_required
 def delete_fork():
     user = User.query.filter_by(login=get_jwt_identity()).first()
-    fork_name = request.args.get('name')
+    fork_name = request.args.get('name', None)
     fork = Fork.query.filter_by(name=fork_name).first_or_404()
     if fork.user == user.email:
         db.session.delete(fork)
@@ -79,7 +82,7 @@ def delete_fork():
     return jsonify(error='You cannot delete this fork'), 400
 
 
-@main.route('/forks/my_forks')
+@main.route('/my_forks')
 @jwt_required
 def show_your_forks():
     user = User.query.filter_by(login=get_jwt_identity()).first()
@@ -87,7 +90,7 @@ def show_your_forks():
     return jsonify(my_forks), 200
 
 
-@main.route('/forks/<string:email>')
+@main.route('/<string:email>')
 @jwt_required
 def show_forks_owned_by_user(email):
     user = User.query.filter_by(email=email).first()
@@ -97,10 +100,10 @@ def show_forks_owned_by_user(email):
     return jsonify(error='Couldn\'t find that user'), 400
 
 
-@main.route('/forks/sign_up', methods=['POST'])
+@main.route('/sign_up', methods=['POST'])
 @jwt_required
 def sign_up_for_notifications():
-    request_category = request.args.get('category')
+    request_category = request.args.get('category', None)
     existing_categories = [category.category for category in ForkCategory.query.all()]
     if request_category not in existing_categories:
         return jsonify(error='This category doesn\'t exist.'), 404
@@ -114,7 +117,7 @@ def sign_up_for_notifications():
         return jsonify(status=f'{user_email} is already signed up for {request_category}'), 409
 
 
-@main.route('/forks/remove_subscription', methods=['DELETE'])
+@main.route('/remove_subscription', methods=['DELETE'])
 @jwt_required
 def remove_email_notifications():
     request_category = request.args.get('category')
@@ -127,7 +130,7 @@ def remove_email_notifications():
     return jsonify(f'{user_email} is not signed up for {request_category}')
 
 
-@main.route('/forks/view_subscriptions')
+@main.route('/view_subscriptions')
 @jwt_required
 def view_subscriptions():
     user_email = User.query.filter_by(login=get_jwt_identity()).first().email
