@@ -1,8 +1,5 @@
 from email_validator import validate_email, EmailNotValidError
 from fork.models import ForkCategory
-from flask_mail import Mail, Message
-
-mail = Mail()
 
 
 def validate_user_email(email):
@@ -35,15 +32,3 @@ def prepare_creation_data(raw_data):
                   }
         return result
     return False  # False means that given data is invalid in some way
-
-
-def send_notification_email(users_list, fork_category):
-    """Sends an email to a list of users, subscribed to some fork category"""
-    for user in users_list:
-        msg = Message('New fork added!',
-                      sender='fork_project@gmail.com',
-                      recipients=[user.user_email])
-        msg.body = f"""Hello, {user.user_email},
-New fork was added to {fork_category}
-"""
-    mail.send(msg)
