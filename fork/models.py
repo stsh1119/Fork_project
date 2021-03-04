@@ -85,6 +85,7 @@ class SubscriptionSchema(ma.SQLAlchemySchema):
 
 
 user_schema = UserSchema()
+fork_schema = ForkSchema()
 forks_schema = ForkSchema(many=True)
 fork_category_schema = ForkCategorySchema(many=True)
 subscription_schema = SubscriptionSchema(many=True)
