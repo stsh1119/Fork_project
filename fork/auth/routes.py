@@ -1,17 +1,22 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, jwt_refresh_token_required, get_jwt_identity, get_raw_jwt
 from fork import jwt
+import redis
 from .valdators import register_validator, login_validator, change_password_validator
-from .auth_service import register_service, login_service, refresh_token_service, change_password_service
+from .auth_service import register_service, login_service, refresh_token_service, change_password_service, ACCESS_TOKEN_EXPIRY
 
 auth = Blueprint('auth', __name__)
 blacklist = set()
+jwt_redis_blacklist = redis.StrictRedis(
+    host="localhost", port=6379, db=0, decode_responses=True
+)
 
 
 @jwt.token_in_blacklist_loader
 def check_if_token_in_blacklist(decrypted_token):
     jti = decrypted_token['jti']
-    return jti in blacklist
+    token_in_redis = jwt_redis_blacklist.get(jti)
+    return token_in_redis is not None
 
 
 @auth.route('/register', methods=['POST'])
@@ -48,7 +53,8 @@ def refresh():
 @jwt_required
 def logout():
     jti = get_raw_jwt()['jti']
-    blacklist.add(jti)
+    jwt_redis_blacklist.set(jti, "", ex=ACCESS_TOKEN_EXPIRY)
+    # blacklist.add(jti)
     return jsonify({"msg": "Successfully logged out"}), 200
 
 
