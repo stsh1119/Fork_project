@@ -1,16 +1,4 @@
-from email_validator import validate_email, EmailNotValidError
 from fork.models import ForkCategory
-
-
-def validate_user_email(email):
-    """"Using third party library validates user's email and in case email is invalid - returns falsey value"""
-    try:
-        valid = validate_email(email)
-        email = valid.email
-        return email
-    except EmailNotValidError:
-        email = ''
-        return email
 
 
 def prepare_creation_data(raw_data):

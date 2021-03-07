@@ -1,20 +1,11 @@
 from flask import Blueprint, request, jsonify
-from sqlalchemy.exc import IntegrityError
-from flask_jwt_extended import (
-    jwt_required, create_access_token,
-    jwt_refresh_token_required, create_refresh_token,
-    get_jwt_identity, get_raw_jwt
-)
-import datetime
-from fork import bcrypt, db, jwt
-from fork.models import User
-from fork.utils import validate_user_email
+from flask_jwt_extended import jwt_required, jwt_refresh_token_required, get_jwt_identity, get_raw_jwt
+from fork import jwt
+from .valdators import register_validator, login_validator, change_password_validator
+from .auth_service import register_service, login_service, refresh_token_service, change_password_service
 
 auth = Blueprint('auth', __name__)
 blacklist = set()
-
-ACCESS_TOKEN_EXPIRY = datetime.timedelta(minutes=15)
-REFRESH_TOKEN_EXPIRY = datetime.timedelta(days=1)
 
 
 @jwt.token_in_blacklist_loader
@@ -27,59 +18,30 @@ def check_if_token_in_blacklist(decrypted_token):
 def register():
     if not request.json:
         return jsonify(error="Missing request body."), 400
-    login = request.json.get('login', None)
-    email = request.json.get('email', None)
-    password = request.json.get('password', None)
-
-    email = validate_user_email(email)
-    if all([login, email, password]):
-        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-        user = User(email=email,
-                    login=login,
-                    password=hashed_password,
-                    )
-        try:
-            db.session.add(user)
-            db.session.commit()
-            return jsonify('Success'), 201
-        except IntegrityError:
-            return jsonify({'error': 'That login or email is already taken.'}), 200
-    else:
-        return jsonify({'error': 'Missing data'})
+    try:
+        login, email, password = register_validator(request.json)
+        register_service(login, email, password)
+        return jsonify('Success'), 201
+    except Exception as e:
+        return jsonify(str(e)), 400
 
 
 @auth.route('/login', methods=['POST'])
 def login():
     if not request.json:
         return jsonify(error="Missing request body."), 400
-    login = request.json.get('login', None)
-    password = request.json.get('password', None)
-    user = User.query.filter_by(login=login).first()
-    if user and bcrypt.check_password_hash(user.password, password):
-        refresh_token = create_refresh_token(identity=login, expires_delta=REFRESH_TOKEN_EXPIRY)
-        response = {
-            'access_token': create_access_token(identity=login, expires_delta=ACCESS_TOKEN_EXPIRY),
-            'refresh_token': refresh_token,
-        }
-        user.refresh_token = refresh_token
-        db.session.commit()
-        return jsonify(response), 200
-    return jsonify({"msg": "Bad login or password"}), 401
+    try:
+        login, password = login_validator(request.json)
+        return jsonify(login_service(login, password)), 200
+    except Exception as e:
+        return jsonify(str(e)), 400
 
 
 @auth.route('/refresh', methods=['POST'])
 @jwt_refresh_token_required
 def refresh():
     current_user = get_jwt_identity()
-    new_refresh_token = create_refresh_token(identity=current_user, expires_delta=REFRESH_TOKEN_EXPIRY)
-    response = {
-        'access_token': create_access_token(identity=current_user, expires_delta=ACCESS_TOKEN_EXPIRY),
-        'refresh_token': new_refresh_token,
-    }
-    user = User.query.filter_by(login=current_user).first()
-    user.refresh_token = new_refresh_token
-    db.session.commit()
-    return jsonify(response), 200
+    return jsonify(refresh_token_service(current_user)), 200
 
 
 @auth.route('/logout', methods=['DELETE'])
@@ -95,18 +57,9 @@ def logout():
 def change_password():
     if not request.json:
         return jsonify(error="Missing request body."), 400
-
-    current_user = get_jwt_identity()
-    user = User.query.filter_by(login=current_user).first()
-    old_password = request.json.get('old_password', None)
-    new_password = request.json.get('new_password', None)
-    confirm_new_password = request.json.get('confirm_new_password', None)
-
-    if (all([old_password, new_password, confirm_new_password])
-       and new_password == confirm_new_password
-       and bcrypt.check_password_hash(user.password, old_password)
-       and old_password != new_password):
-        user.password = bcrypt.generate_password_hash(new_password)
-        db.session.commit()
-        return jsonify(msg="Password was changed."), 201
-    return jsonify(msg="Bad request, following parameters are required: old_password, new_password, confirm_new_password"), 400
+    try:
+        old_password, new_password, confirm_new_password = change_password_validator(request.json)
+        change_password_service(old_password, new_password, get_jwt_identity())
+        return jsonify(msg="Password was changed.")
+    except Exception as e:
+        return jsonify(str(e)), 400
