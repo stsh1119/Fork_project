@@ -1,11 +1,9 @@
 from flask import jsonify, request, Blueprint
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from fork.models import (Fork, User, ForkCategory, Subscription, db,
-                         fork_category_schema, forks_schema, subscription_schema, fork_schema)
-from fork.utils import prepare_creation_data
-from sqlalchemy import exc
-from fork.tasks import send_notification_email
-
+from fork.main.service import (view_all_forks, view_certain_fork_by_id, view_fork_catagories, view_my_forks,
+                               view_forks_from_category, create_fork, delete_fork_by_name,
+                               view_forks_owned_by_user, sign_up_for_email_notifications,
+                               unsubscribe_from_email_notifications, view_my_subscriptions)
 ITEMS_PER_PAGE = 10
 
 main = Blueprint('main', __name__, url_prefix='/forks')
@@ -15,26 +13,20 @@ main = Blueprint('main', __name__, url_prefix='/forks')
 @jwt_required
 def get_all_forks():
     page = request.args.get('page', default=1, type=int)
-    forks = Fork.query.order_by(Fork.fork_id.desc()).paginate(page=page, per_page=ITEMS_PER_PAGE).items
-    serialized_forks = forks_schema.dump(forks)
-    return jsonify(serialized_forks)
+    return jsonify(view_all_forks(page)), 200
 
 
 @main.route('/<int:fork_id>')
 @jwt_required
 def get_fork_by_id(fork_id):
-    fork = Fork.query.filter_by(fork_id=fork_id).first()
-    serialized_fork = fork_schema.dump(fork)
-    return jsonify(serialized_fork)
+    return jsonify(view_certain_fork_by_id(fork_id)), 200
 
 
 @main.route('/categories')
 @jwt_required
 def get_fork_catagories():
     page = request.args.get('page', default=1, type=int)
-    categories = ForkCategory.query.paginate(page=page, per_page=ITEMS_PER_PAGE).items
-    serialized_categories = fork_category_schema.dump(categories)
-    return jsonify(serialized_categories)
+    return jsonify(view_fork_catagories(page)), 200
 
 
 @main.route('/category/<string:category_name>')
@@ -42,100 +34,57 @@ def get_fork_catagories():
 @jwt_required
 def get_forks_from_category(category_name):
     page = request.args.get('page', default=1, type=int)
-    forks = Fork.query.filter_by(fork_category=category_name).paginate(page=page, per_page=ITEMS_PER_PAGE).items
-    serialized_forks = forks_schema.dump(forks)
-    return jsonify(serialized_forks)
+    return jsonify(view_forks_from_category(category_name, page)), 200
 
 
 @main.route('/create', methods=['POST'])
 @jwt_required
 def create_new_fork():
-    user = User.query.filter_by(login=get_jwt_identity()).first()
-    results = prepare_creation_data(request.json)
-    if results:
-        fork = Fork(name=results.get('name'),
-                    description=results.get('description'),
-                    creation_date=results.get('creation_date'),
-                    fork_category=results.get('category'),
-                    user=user.email)
-        db.session.add(fork)
-        db.session.commit()
-        users_to_notify = Subscription.query.filter_by(subscription_category=results.get('category')).all()
-        serialized_users_to_notify = subscription_schema.dump(users_to_notify)
-        if serialized_users_to_notify:
-            send_notification_email.delay(users_list=serialized_users_to_notify, fork_category=results.get('category'))
-            return jsonify(result='Fork successfully created'), 201
-        return jsonify(result='Fork successfully created'), 201
-    return jsonify(error='One or several parameters are invalid'), 400
+    if not request.json:
+        return jsonify(error="Missing request body."), 400
+    try:
+        return jsonify(create_fork(request.json, get_jwt_identity())), 200
+    except Exception as e:
+        return jsonify(e), 400
 
 
 @main.route('/delete', methods=['DELETE'])
 @jwt_required
 def delete_fork():
-    user = User.query.filter_by(login=get_jwt_identity()).first()
-    fork_name = request.args.get('name', None)
-    fork = Fork.query.filter_by(name=fork_name).first_or_404()
-    if fork.user == user.email:
-        db.session.delete(fork)
-        db.session.commit()
-        return jsonify(result='Fork successfully deleted'), 201
-    return jsonify(error='You cannot delete this fork'), 400
+    fork_name = request.args.get('name', None, type=str)
+    return jsonify(delete_fork_by_name(fork_name, get_jwt_identity())), 200
 
 
 @main.route('/my_forks')
 @jwt_required
 def show_your_forks():
-    user = User.query.filter_by(login=get_jwt_identity()).first()
-    my_forks = forks_schema.dump(Fork.query.filter_by(user=user.email).all())
-    return jsonify(my_forks), 200
+    return jsonify(view_my_forks(get_jwt_identity())), 200
 
 
 @main.route('/<string:email>')
 @jwt_required
 def show_forks_owned_by_user(email):
-    user = User.query.filter_by(email=email).first()
-    if user:
-        user_forks = forks_schema.dump(Fork.query.filter_by(user=user.email).all())
-        return jsonify(user_forks), 200
-    return jsonify(error='Couldn\'t find that user'), 400
+    return jsonify(view_forks_owned_by_user(email)), 200
 
 
 @main.route('/sign_up', methods=['POST'])
 @jwt_required
 def sign_up_for_notifications():
     request_category = request.args.get('category', None)
-    existing_categories = [category.category for category in ForkCategory.query.all()]
-    if request_category not in existing_categories:
-        return jsonify(error='This category doesn\'t exist.'), 404
-    user_email = User.query.filter_by(login=get_jwt_identity()).first().email
-    subscription = Subscription(user_email=user_email, subscription_category=request_category)
     try:
-        db.session.add(subscription)
-        db.session.commit()
-        return jsonify(status=f'{user_email} has signed up for {request_category}'), 200
-    except exc.IntegrityError:
-        return jsonify(status=f'{user_email} is already signed up for {request_category}'), 409
+        return jsonify(sign_up_for_email_notifications(request_category, get_jwt_identity()))
+    except Exception as e:
+        return jsonify(e), 400
 
 
 @main.route('/remove_subscription', methods=['DELETE'])
 @jwt_required
 def remove_email_notifications():
-    request_category = request.args.get('category')
-    user_email = User.query.filter_by(login=get_jwt_identity()).first().email
-    subscription = Subscription.query.filter_by(user_email=user_email, subscription_category=request_category).first()
-    if subscription:
-        db.session.delete(subscription)
-        db.session.commit()
-        return jsonify(f'Subscription for {request_category} was cancelled'), 200
-    return jsonify(f'{user_email} is not signed up for {request_category}')
+    request_category = request.args.get('category', None)
+    return jsonify(unsubscribe_from_email_notifications(request_category, get_jwt_identity())), 200
 
 
 @main.route('/view_subscriptions')
 @jwt_required
 def view_subscriptions():
-    user_email = User.query.filter_by(login=get_jwt_identity()).first().email
-    subscriptions = Subscription.query.filter_by(user_email=user_email).all()
-    if subscriptions:
-        result = [subscriptions.subscription_category for subscriptions in subscriptions]
-        return jsonify(result)
-    return jsonify(f'{user_email} does not have any subscriptions')
+    return jsonify(view_my_subscriptions(get_jwt_identity())), 200

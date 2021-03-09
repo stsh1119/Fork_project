@@ -6,7 +6,6 @@ from .valdators import register_validator, login_validator, change_password_vali
 from .auth_service import register_service, login_service, refresh_token_service, change_password_service, ACCESS_TOKEN_EXPIRY
 
 auth = Blueprint('auth', __name__)
-blacklist = set()
 jwt_redis_blacklist = redis.StrictRedis(
     host="localhost", port=6379, db=0, decode_responses=True
 )
@@ -54,7 +53,6 @@ def refresh():
 def logout():
     jti = get_raw_jwt()['jti']
     jwt_redis_blacklist.set(jti, "", ex=ACCESS_TOKEN_EXPIRY)
-    # blacklist.add(jti)
     return jsonify({"msg": "Successfully logged out"}), 200
 
 

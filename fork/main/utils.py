@@ -1,17 +1,17 @@
 from fork.models import ForkCategory
 
 
-def prepare_creation_data(raw_data):
+def prepare_creation_data(request):
     """"Categories  are going to be predefined, so that users can only choose from suggested ones,
         this will be marked as 'Uncategorized' otherwise.
 
         If all([name, description, creation_date, category in [category.category for category in ForkCategory.query.all()]]):
         checks whether all needed parameters are present in json body AND that provided category is within already existing ones
     """
-    name = raw_data.get('name', None)
-    description = raw_data.get('description', None)
-    creation_date = raw_data.get('creation_date', None)
-    category = raw_data.get('category', 'Uncategorized')
+    name = request.get('name', None)
+    description = request.get('description', None)
+    creation_date = request.get('creation_date', None)
+    category = request.get('category', 'Uncategorized')
     if all([name, description, creation_date, category in [category.category for category in ForkCategory.query.all()]]):
         result = {'name': name,
                   'description': description,
