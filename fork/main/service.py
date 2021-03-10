@@ -19,7 +19,7 @@ def view_certain_fork_by_id(fork_id):
     return serialized_fork
 
 
-def view_fork_catagories(page,):
+def view_fork_catagories(page):
     categories = ForkCategory.query.paginate(page=page, per_page=ITEMS_PER_PAGE).items
     serialized_categories = fork_category_schema.dump(categories)
     return serialized_categories
